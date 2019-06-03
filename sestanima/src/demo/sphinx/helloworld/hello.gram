@@ -1,0 +1,11 @@
+
+grammar hello;
+
+
+public <greet> = ( Program | Device Manager | Control |task manager | See You Later);
+
+public <command> = ( Open | Close ) (calculator | access | access |task manager | Chrome | Keyboard);
+
+public <action> = (start | stop ) (excel | text);
+
+public <net> = (site) (face book | what sapp | school);

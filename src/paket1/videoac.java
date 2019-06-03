@@ -10,6 +10,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.Random;
 import javax.imageio.ImageIO;
 import javax.sound.sampled.AudioInputStream;
@@ -34,17 +35,33 @@ import org.opencv.objdetect.CascadeClassifier;
 import org.opencv.videoio.VideoCapture;
 import org.opencv.videoio.Videoio;
 import static org.opencv.objdetect.Objdetect.CASCADE_SCALE_IMAGE;
-import paket1.formolustur;
 
 public class videoac {
 static ArrayList<Point>merkez_noktalarının_dizisi=new ArrayList<>();
 static  ArrayList<Point>tıklanma_noktalari=new ArrayList<>();
 static int aradegisken=0;
+
+//sag tıklama icin tıklanıp tıklanmadığını kontrol eden pointer kullanmamız lazım
+ public static  int sag_tiklandimi=0;
+ static  ArrayList<Point> sag_merkez_noktalarının_dizisi=new ArrayList<>();
+ static  ArrayList<Point> sag_tıklanma_noktalari=new ArrayList<>();
+ static int sag_aradegisken=0;  
+
+ //çift tıklama için gerekli global tanımlamaların bulunduğu bölümü.
+ public static int cift_tiklandimi=0;
+ static ArrayList<Point> cift_merkez_noktalarının_dizisi=new ArrayList<>();
+ static ArrayList<Point> cift_tıklanma_noktalari=new ArrayList<>();
+ static int cift_aradegisken=0;
+
+
+    public videoac() {
+    }
+ 
      public static void main(String[] args) throws AWTException,NullPointerException {
-      System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+      System.load("C:\\Users\\Mert\\Desktop\\opencv\\opencv\\build\\java\\x64\\opencv_java400.dll");
        CascadeClassifier facecascade = new CascadeClassifier("C:\\Users\\Mert\\Desktop\\opencv\\opencv\\build\\etc\\haarcascades\\haarcascade_frontalface_alt2.xml");
        CascadeClassifier eyecascade=new CascadeClassifier("C:\\Users\\Mert\\Desktop\\opencv\\opencv\\build\\etc\\haarcascades\\haarcascade_eye.xml");
-    formolustur yeni_form=new formolustur();
+        formolustur yeni_form=new formolustur();
          yeni_form.setVisible(true);
           VideoCapture videodevice=new VideoCapture();
           videodevice.open(0);
@@ -62,17 +79,59 @@ static int aradegisken=0;
               Runtime.getRuntime().exit(0);
           }
           Mat kameraverisi=new Mat(); 
-          System.out.println(videodevice.get(Videoio.CAP_PROP_FRAME_WIDTH)); 
-          System.out.println(videodevice.get(Videoio.CAP_PROP_FRAME_HEIGHT)); 
-          System.out.println(videodevice.get(Videoio.CAP_PROP_FPS));
-           while (true) {            
+          //sag tıklama için yeni bir kamera verisi yakalamam lazım
+          Mat sagtıklamaverisi=new Mat();
+          //çift tıklama yapmak için yeni bir frame alalım
+          Mat  cifttıklamaverisi=new Mat();
+          while (true) {     
+              //şimdi sag tıklama için gerekli olan kodu yazmam lazım
+              // ilk olarak aktifliğine ve pasifliğine bakıyorum
+              if(formolustur.sagtik_pointer==1&&formolustur.cifttik_pointer==0){
+                  sag_tiklandimi=0;
+                  Date now=new Date();
+                  long eklenmemis=now.getTime();
+                  long eklenmis=now.getTime()+20000L;
+                  while(eklenmemis!=eklenmis){
+                      videodevice.read(sagtıklamaverisi);
+                      Core.flip(sagtıklamaverisi,sagtıklamaverisi,1);
+                      sagtıklama_islemleri_yap(sagtıklamaverisi,facecascade,eyecascade);
+                      yeni_form.iconata(donustur(sagtıklamaverisi));
+                      eklenmis-=1000;
+                      // burada da tıklanıp tıklanmadığına bakıyorum 
+                      // eğer tıklama yapıldıysa doğrudan dönğünün kırılması lazım yoksa devam eder 
+                      // amacım tıklam yapıldıktan sonra döngüyü kırmak
+                      if(sag_tiklandimi==1){
+                         yeni_form.sagdeğistir();
+                          break;
+                      }
+                  }
+              }
+              if(formolustur.cifttik_pointer==1 && formolustur.sagtik_pointer==0){
+                 cift_tiklandimi=0;
+                  Date now=new Date();
+                  long eklenmemis=now.getTime();
+                  long eklenmis=now.getTime()+20000L;
+                  while(eklenmis!=eklenmemis){
+                      videodevice.read(cifttıklamaverisi);
+                      Core.flip(cifttıklamaverisi,cifttıklamaverisi,1);
+                      cifttıklama_islemlerini_yap(cifttıklamaverisi,facecascade,eyecascade);
+                      yeni_form.iconata(donustur(cifttıklamaverisi));
+                      eklenmis-=1000;
+                      if(cift_tiklandimi==1){
+                          yeni_form.ciftdeğistir();
+                          break;
+                      }
+                  }
+              }
+              
             videodevice.read(kameraverisi);
             Core.flip(kameraverisi, kameraverisi, 1);
              yuzgozbul(kameraverisi,facecascade,eyecascade);
              yeni_form.iconata(donustur(kameraverisi));
      }
 }
- private static  BufferedImage donustur(Mat veri){
+     //alınan görüntünün form içerisine yollayabilmek için ramden geçiren fonksiyon.
+    private static  BufferedImage donustur(Mat veri){
         MatOfByte bytematversi=new MatOfByte();
         Imgcodecs.imencode(".jpg", veri, bytematversi);
         byte[] bytearray=bytematversi.toArray();
@@ -85,6 +144,7 @@ static int aradegisken=0;
         }
         return  goruntu;
     }  
+    
     private static void yuzgozbul(Mat kameraverisi, CascadeClassifier facecascade, CascadeClassifier eyecascade) {
         try {
             Mat griMat=new Mat();
@@ -305,25 +365,24 @@ static int aradegisken=0;
              Point sonucPoint=new Point();
              sonucPoint=merkez_noktalarını_stabilize_et(merkez_noktalarının_dizisi);
              Point monitor_konumu=new Point();
-             Random r=new Random();
              System.out.println("ŞU AN Kİ MECVUT NOKTA X EKSENİ:"+sonucPoint.x+"Y EKSENİ:"+sonucPoint.y);
              if(sonucPoint.x>=sonuc[0]&& sonucPoint.x<=sonuc[2]){
                  if(sonucPoint.y>=sonuc[1]&& sonucPoint.y<=sonuc[3]){
                  if(sonucPoint.y>=60 && sonucPoint.y<=100){
-                    int d=r.nextInt(21);
-                     sonucPoint.y-=(double)d;
+                   
+                     sonucPoint.y-=15;
                  }
                  if(sonucPoint.y>160){
-                      int d=r.nextInt(21);
-                     sonucPoint.y+=(double)d;
+                   
+                     sonucPoint.y+=20;
                  }
                 if(sonucPoint.x>250){   //bu x eksenini sağ tarafa gitsin diye
-                    int d=r.nextInt(31);
-                    sonucPoint.x+=(double)d;
+                   
+                    sonucPoint.x+=30;
                 }
                 if(sonucPoint.x<70){
-                    int d=r.nextInt(31);
-                    sonucPoint.x-=(double)d;
+                   
+                    sonucPoint.x-=30;
                 }
                      if(sonucPoint.x>=0&& sonucPoint.x<=80){
              if(sonucPoint.y>=0&& sonucPoint.y<=60){
@@ -401,10 +460,8 @@ static int aradegisken=0;
              }
          }
                  }
-             }
-            //buraya sag ve cift tıklama kodunu yazmam gerekecek.
-            
-           mousekonumdegistir(monitor_konumu);
+             }            
+            mousekonumdegistir(monitor_konumu);
             HighGui.namedWindow("solgöz", HighGui.WINDOW_NORMAL);
              imshow("solgöz", sol_buyutulmus_goz);
              if (waitKey(30)>=0) {
@@ -523,8 +580,7 @@ static int aradegisken=0;
           //bu fonksiyona her girmesi bir harekete karşılık geliyorsa her 
           // hareket bir kordinatsa bu kordinatları ekliyeceğim
           tıklanma_noktalari.add(mousePoint);
-            //şimdi ise bu kordinatı karşılaştıracak bir fonk yazalım
-            tıklamayap(tıklanma_noktalari);
+          tıklamayap(tıklanma_noktalari);
         }
         catch(Exception ex){
             System.out.println(ex.getMessage());
@@ -591,7 +647,7 @@ return new Point(toplam_x,toplam_y);
    private static void tıklamayap(ArrayList<Point> tıklanma_kordinatlari) throws InterruptedException {
         try {
             if(tıklanma_kordinatlari.size()>1)
-            {
+            { 
                 int mask=InputEvent.BUTTON1_DOWN_MASK;
                 String soundname="C:\\Users\\Mert\\Desktop\\click.wav";
                 Robot yerdegistir=new Robot(); 
@@ -603,7 +659,7 @@ return new Point(toplam_x,toplam_y);
                         clip.open(audioInputStream);
                         clip.start();
                         yerdegistir.mouseRelease(mask);
-                        yerdegistir.delay(1000);
+                        yerdegistir.delay(550);
                         //clip.stop();
                         break;
                     }
@@ -614,7 +670,7 @@ return new Point(toplam_x,toplam_y);
                         clip.open(audioInputStream);
                         clip.start();
                         yerdegistir.mouseRelease(mask);
-                        yerdegistir.delay(1000);
+                        yerdegistir.delay(550);
                         //clip.stop();
                         break;
                 }
@@ -622,7 +678,6 @@ return new Point(toplam_x,toplam_y);
                 } 
                 aradegisken++;
             }
-       
         }
         catch(ArrayIndexOutOfBoundsException ex1){
             System.out.println(ex1.getMessage());
@@ -631,47 +686,563 @@ return new Point(toplam_x,toplam_y);
             System.out.println(e.getMessage());
         }
    }
-//sag tıklama yapmak için kodun yarısını yazdım
-   //ama timer veya therad kullanrak işlemleri belirli bir süre durdurmam lazım
-   //yaklaşık 10sn durması gerekiyo timer olmaz 
-  /*  private static void sagtıklamayap(ArrayList<Point> tıklanma_kordinatları) throws AWTException {
+   
+
+   //BU İŞLEMLER SADECE  SAG TIKLAMA AKTİF OLDUĞUNDA GERÇEKLEŞECEKTİR.
+   //BAŞLANGICI
+    private static void sagtıklama_islemleri_yap(Mat kameraverisi, CascadeClassifier facecascade, CascadeClassifier eyecascade) {
         try {
-            int mask=InputEvent.BUTTON2_DOWN_MASK;
-            Robot instance=new Robot();
-              String soundname="C:\\Users\\Mert\\Desktop\\click.wav";
-              for(int i=0;i<tıklanma_noktalari.size();i++){
-                  if((int)tıklanma_kordinatları.get(i).x==(int)tıklanma_kordinatları.get(i).x &&(int)tıklanma_kordinatları.get(i).y==(int)tıklanma_kordinatları.get(i).y)
-                  {
-                         instance.mousePress(mask);
+              Mat griMat=new Mat();
+            Imgproc.cvtColor(kameraverisi, griMat, Imgproc.COLOR_RGB2GRAY);
+            Imgproc.equalizeHist(griMat, griMat);
+          
+           /* gerçek_video_tasaması:
+            
+              HighGui.namedWindow("gerçek video", HighGui.WINDOW_NORMAL);
+             imshow("gerçek video", griMat);
+             if (waitKey(30)>=0) {
+               Runtime.getRuntime().exit(0); 
+            }*/
+             MatOfRect bulacagim_yuzler=new MatOfRect();
+            MatOfRect bulacagim_gozler=new MatOfRect();
+            Rect[] bulanan_yuzlerin_dizisi;
+            Rect[] bulunan_gozlerin_dizisi;
+            
+              facecascade.detectMultiScale(griMat,bulacagim_yuzler,1.1,2,0|CASCADE_SCALE_IMAGE,new Size(50,50),new Size(120,120)); 
+            bulanan_yuzlerin_dizisi=bulacagim_yuzler.toArray();
+            if(bulanan_yuzlerin_dizisi.length==0){
+               // JOptionPane.showMessageDialog(null, "Şuan yüzünüzü bulamıyorum eğer yüz bölgenizde bir nesne varsa çıkartmanız gerekmektedir","Yüz bulamama Uyarısı",JOptionPane.ERROR_MESSAGE);
+             return;
+            }
+            //tam bir yüz benim bulduğum ilk yüz olmaktadır.
+            Mat tambiryuz=new Mat();
+            tambiryuz=griMat.submat(bulanan_yuzlerin_dizisi[0]);
+            /*bulduğum_ilk_yuz:
+            
+              HighGui.namedWindow("bulduğum_ilk_yuz", HighGui.WINDOW_NORMAL);
+             imshow("bulduğum_ilk_yuz", tambiryuz);
+             if (waitKey(30)>=0) {
+               Runtime.getRuntime().exit(0); 
+            }*/
+            
+             //Şimdi gözleri buluyorum
+            //Ama artık kameraverisinden göz bulmama gerek kalmadı tambiryüzden bulabilirim
+            //artık herşey tambir yüz içerisinde
+            eyecascade.detectMultiScale(tambiryuz, bulacagim_gozler,1.1,2,0|CASCADE_SCALE_IMAGE,new Size(15,15),new Size(30,30));
+            //Şimdi yüzümün etrafını çizelim
+            Imgproc.rectangle(kameraverisi, bulanan_yuzlerin_dizisi[0].tl(),bulanan_yuzlerin_dizisi[0].br(),new Scalar(0, 0, 179),3);
+            bulunan_gozlerin_dizisi=bulacagim_gozler.toArray();
+            if(bulunan_gozlerin_dizisi.length!=2){
+                //JOptionPane.showMessageDialog(null, "Nedense iki tane göz bulamadım göz bölgenizde bir nesne varsa çıkartınız","Göz bulamama hatası",JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+             for (Rect rect : bulunan_gozlerin_dizisi) {
+                 //burada da gözlerin etrafını çiziyorum
+                Imgproc.rectangle(kameraverisi,new Point(bulanan_yuzlerin_dizisi[0].tl().x+rect.tl().x,bulanan_yuzlerin_dizisi[0].tl().y+rect.tl().y),new Point(bulanan_yuzlerin_dizisi[0].tl().x+rect.br().x,bulanan_yuzlerin_dizisi[0].tl().y+rect.br().y),new Scalar(0,255,0),2);
+            }
+             //Şimdi sol gözü bulmam gerekiyo
+             Rect solgozuncercevesi = null;
+              Rect saggozuncercevesi = null;
+              solgozuncercevesi=solgozgetir(bulunan_gozlerin_dizisi);
+                    for(int i=0;i<bulunan_gozlerin_dizisi.length;i++){
+                        if(solgozuncercevesi.x!=bulunan_gozlerin_dizisi[i].x){
+                            saggozuncercevesi=bulunan_gozlerin_dizisi[i];
+                        }
+                    }
+                    
+                    //şimdi contour algoritması ile hough transformunu birleştirmem lkazım
+               //hough transformunun merkezleri ile  contoursun merkezlerini karşılaştıracağım
+               //olay şu circle un içinde olması gerekir contoursun dışına çıkamaz
+                //sol göz için merkezlerin heabı
+                Point sol_icin_orta_nokta=new Point();
+                sol_icin_orta_nokta.x=(solgozuncercevesi.tl().x+solgozuncercevesi.br().x)/2;
+                sol_icin_orta_nokta.y=(solgozuncercevesi.tl().y+solgozuncercevesi.br().y)/2;
+                //ekrana bas bakalım
+               // System.out.println("Sol gozun orta noktası x ekseni:"+sol_icin_orta_nokta.x+"y ekseni:"+sol_icin_orta_nokta.y);
+                Imgproc.circle(kameraverisi, new Point(bulanan_yuzlerin_dizisi[0].tl().x+sol_icin_orta_nokta.x,bulanan_yuzlerin_dizisi[0].tl().y+sol_icin_orta_nokta.y),3,new Scalar(0,0,255),3);
+                    
+                //sag goz icin merkez hesabı
+                Point sag_icin_orta_nokta=new Point();
+                sag_icin_orta_nokta.x=(saggozuncercevesi.tl().x+saggozuncercevesi.br().x)/2;
+                sag_icin_orta_nokta.y=(saggozuncercevesi.tl().y+saggozuncercevesi.br().y)/2;
+                //System.out.println("Sag gozun orta noktası x ekseni:"+sag_icin_orta_nokta.x+"y ekseni"+sag_icin_orta_nokta.y);
+                Imgproc.circle(kameraverisi, new Point(bulanan_yuzlerin_dizisi[0].tl().x+sag_icin_orta_nokta.x,bulanan_yuzlerin_dizisi[0].tl().y+sag_icin_orta_nokta.y),3,new Scalar(255,0,0),3);
+                
+                //noktalar arası uzaklık
+              Point gozler_arasi_orta_nokta=new Point();
+              gozler_arasi_orta_nokta.x=(sol_icin_orta_nokta.x+sag_icin_orta_nokta.x)/2;
+              gozler_arasi_orta_nokta.y=(sol_icin_orta_nokta.y+sag_icin_orta_nokta.y)/2;
+             // System.out.println("gozler arasi orta nokta x ekseni:"+gozler_arasi_orta_nokta.x+"y ekseni:"+gozler_arasi_orta_nokta.y);
+              Imgproc.circle(kameraverisi, new Point(bulanan_yuzlerin_dizisi[0].tl().x+ gozler_arasi_orta_nokta.x,bulanan_yuzlerin_dizisi[0].tl().y+ gozler_arasi_orta_nokta.y),3,new Scalar(0,255,255),3);
+                
+              //yuzun ortası
+              Point yuzun_ortası=new Point();
+              yuzun_ortası.x=(bulanan_yuzlerin_dizisi[0].tl().x+bulanan_yuzlerin_dizisi[0].br().x)/2;
+              yuzun_ortası.y=(bulanan_yuzlerin_dizisi[0].tl().y+bulanan_yuzlerin_dizisi[0].br().y)/2;
+              //System.out.println("bulunan yuzun orta noktası x ekseni:"+yuzun_ortası.x+"y ekseni:"+yuzun_ortası.y);
+              Imgproc.circle(kameraverisi, new Point(yuzun_ortası.x,yuzun_ortası.y),3,new Scalar(255,0,255),3);
+              
+              double[] sonuc=new double[4];
+              sag_merkez_noktalarının_dizisi.add(yuzun_ortası);
+              sonuc=maxminbul(sag_merkez_noktalarının_dizisi);
+              Point sonucPoint=new Point();
+              sonucPoint=merkez_noktalarını_stabilize_et(sag_merkez_noktalarının_dizisi);
+              Point monitor_konumu=new Point();
+              System.out.println("SAG TIKLAMA İÇİN ŞUANKİ KONUM -- X EKSENİ:"+sonucPoint.x+"Y EKSENİ:"+sonucPoint.y);
+             if(sonucPoint.x>=sonuc[0]&& sonucPoint.x<=sonuc[2]){
+                 if(sonucPoint.y>=sonuc[1]&& sonucPoint.y<=sonuc[3]){
+                 if(sonucPoint.y>=60 && sonucPoint.y<=100){
+                   
+                     sonucPoint.y-=15;
+                 }
+                 if(sonucPoint.y>160){
+                     
+                     sonucPoint.y+=20;
+                 }
+                if(sonucPoint.x>250){   //bu x eksenini sağ tarafa gitsin diye
+                    
+                    sonucPoint.x+=30;
+                }
+                if(sonucPoint.x<70){
+                   
+                    sonucPoint.x-=30;
+                }
+                     if(sonucPoint.x>=0&& sonucPoint.x<=80){
+             if(sonucPoint.y>=0&& sonucPoint.y<=60){
+                 monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*0.70;
+
+             }
+             else if(sonucPoint.y>60 &&sonucPoint.y<=120){
+                  monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*3.75;
+
+             }
+             else if(sonucPoint.y>120 && sonucPoint.y<=180){
+                   monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*3.75;
+             }
+             else if(sonucPoint.y>180 &&sonucPoint.y<=240){
+                 monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*5.75;
+             }
+         }
+         else if(sonucPoint.x>80 &&sonucPoint.x<=160){
+              if(sonucPoint.y>=0&& sonucPoint.y<=60){
+                    monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*0.70;
+             }
+             else if(sonucPoint.y>60 &&sonucPoint.y<=120){
+                   monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*3.75;
+             }
+             else if(sonucPoint.y>120 && sonucPoint.y<=180){
+                   monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*3.75;
+             }
+             else if(sonucPoint.y>180 &&sonucPoint.y<=240){
+                  monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*5.75;
+             }
+         }
+         else if(sonucPoint.x>160 && sonucPoint.x<=240){
+              if(sonucPoint.y>=0&& sonucPoint.y<=60){
+                    monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*0.70;
+             }
+             else if(sonucPoint.y>60 &&sonucPoint.y<=120){
+                   monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*3.75;
+             }
+             else if(sonucPoint.y>120 && sonucPoint.y<=180){
+                  monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*3.75;
+             }
+             else if(sonucPoint.y>180 &&sonucPoint.y<=240){
+                 monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*5.75;
+             }
+         }
+         //burada daha fazla x ekseninde gidebilmesi için 8 ile çarptım
+         else if(sonucPoint.x>240 &&sonucPoint.x<=320){
+              if(sonucPoint.y>=0&& sonucPoint.y<=60){
+                   monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*0.70;
+             }
+             else if(sonucPoint.y>60 &&sonucPoint.y<=120){
+                   monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*3.75;
+             }
+             else if(sonucPoint.y>120 && sonucPoint.y<=180){
+                  monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*3.75;
+             }
+             else if(sonucPoint.y>180 &&sonucPoint.y<=240){
+                  monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*5.75;
+             }
+         }
+                 }
+             }
+             sag_tıklama_icin_konum_degistir(monitor_konumu);
+             System.gc();
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+    }
+
+    private static void sag_tıklama_icin_konum_degistir(Point mousePoint) {
+        try {
+            System.out.println("SAG TIKLAMADA HAREKET EDİLMEK İSTENEN NOKTANIN X EKSENİ:"+ mousePoint.x+"Y EKSENİ:"+mousePoint.y);
+            if(mousePoint.x<0){
+               mousePoint.x=0;
+           }
+           if(mousePoint.y<0){
+               mousePoint.y=0;
+           }
+           if(mousePoint.y>900){
+               mousePoint.y=900;
+           }
+           if(mousePoint.x>1600){
+               mousePoint.x=1600;
+           }
+             Robot konum=new Robot();
+           konum.mouseMove((int)mousePoint.x,(int)mousePoint.y);
+            //Şuan tıklama olayını yazıyorum
+           //ama doğrudan tıklayamazsın bir noktaya tıklama yapmak için
+           //o noktanın kordinatının belirli bir süre aynı kalması lazım veya çok çok değişmesi lazım
+          
+           //ilk olarak static arraylist oluştur oluşturdum "sag_tıklanma_noktalari"
+          //bu fonksiyona her girmesi bir harekete karşılık geliyorsa her 
+          // hareket bir kordinatsa bu kordinatları ekliyeceğim
+          sag_tıklanma_noktalari.add(mousePoint);
+          sag_tıklama_yap(sag_tıklanma_noktalari);
+        } catch (Exception e) {
+            System.err.println(e.getMessage());
+        }
+    }
+
+    private static void sag_tıklama_yap(ArrayList<Point> sag_tıklanma_kordinatları) {
+        try {
+            if(sag_tıklanma_kordinatları.size()>1){
+                int mask=InputEvent.BUTTON3_DOWN_MASK;
+                String soundname="C:\\Users\\Mert\\Desktop\\sag.wav";
+                Robot yerdegistir=new Robot(); 
+                for(int i=sag_aradegisken;i<sag_tıklanma_kordinatları.size();i++){
+                    if((int)sag_tıklanma_kordinatları.get(i).x==(int)sag_tıklanma_kordinatları.get(i+1).x &&(int)sag_tıklanma_kordinatları.get(i).y==(int)sag_tıklanma_kordinatları.get(i+1).y){
+                        yerdegistir.mousePress(mask);
                         AudioInputStream audioInputStream=AudioSystem.getAudioInputStream(new File(soundname).getAbsoluteFile());
                         Clip clip=AudioSystem.getClip();
                         clip.open(audioInputStream);
                         clip.start();
-                       //Thread.sleep(100L);
-                        instance.mouseRelease(mask);
+                        yerdegistir.mouseRelease(mask);
+                        yerdegistir.delay(500);
                         //clip.stop();
+                        sag_tiklandimi=1;
                         break;
-              }
-                   else if(Math.abs((int)tıklanma_kordinatları.get(i).x-(int)tıklanma_kordinatları.get(i+1).x)<=1 &&Math.abs((int)tıklanma_kordinatları.get(i).y-(int)tıklanma_kordinatları.get(i+1).y)<=1)
-                   {
-                         instance.mousePress(mask);
+                    }
+                    else if(Math.abs((int)sag_tıklanma_kordinatları.get(i).x-(int)sag_tıklanma_kordinatları.get(i+1).x)<=1 &&Math.abs((int)sag_tıklanma_kordinatları.get(i).y-(int)sag_tıklanma_kordinatları.get(i+1).y)<=1){
+                        yerdegistir.mousePress(mask);
                          AudioInputStream audioInputStream=AudioSystem.getAudioInputStream(new File(soundname).getAbsoluteFile());
-                         Clip clip=AudioSystem.getClip();
+                        Clip clip=AudioSystem.getClip();
                         clip.open(audioInputStream);
                         clip.start();
-                         //Thread.sleep(100L);
-                        instance.mouseRelease(mask);
+                        yerdegistir.mouseRelease(mask);
+                        yerdegistir.delay(500);
                         //clip.stop();
+                        sag_tiklandimi=1;
                         break;
+                    }
+                    break;
                 }
-                  break;
-        }
-              sagtik++;
-        }catch(ArrayIndexOutOfBoundsException ex1){
-            System.err.println(ex1.getLocalizedMessage()+ex1.getMessage());
-        }
+                sag_aradegisken++;
+            }
+        } catch(ArrayIndexOutOfBoundsException ex1){
+            System.err.println(ex1.getMessage());
+        } 
         catch (Exception e) {
-            System.out.println(e.getMessage()+e.getLocalizedMessage());
+            System.err.println(e.getMessage());
         }
-        }*/
     }
+    //BİTİŞİ
+    
+    //BU İŞLEMLER SADECE CİFT TIKLAMA İÇİN ÇALIŞACAKTIR.
+    //BAŞLANGICI
+       private static void cifttıklama_islemlerini_yap(Mat kameraverisi, CascadeClassifier facecascade, CascadeClassifier eyecascade) {
+           try {
+                Mat griMat=new Mat();
+            Imgproc.cvtColor(kameraverisi, griMat, Imgproc.COLOR_RGB2GRAY);
+            Imgproc.equalizeHist(griMat, griMat);
+          
+           /* gerçek_video_tasaması:
+            
+              HighGui.namedWindow("gerçek video", HighGui.WINDOW_NORMAL);
+             imshow("gerçek video", griMat);
+             if (waitKey(30)>=0) {
+               Runtime.getRuntime().exit(0); 
+            }*/
+             MatOfRect bulacagim_yuzler=new MatOfRect();
+            MatOfRect bulacagim_gozler=new MatOfRect();
+            Rect[] bulanan_yuzlerin_dizisi;
+            Rect[] bulunan_gozlerin_dizisi;
+            
+              facecascade.detectMultiScale(griMat,bulacagim_yuzler,1.1,2,0|CASCADE_SCALE_IMAGE,new Size(50,50),new Size(120,120)); 
+            bulanan_yuzlerin_dizisi=bulacagim_yuzler.toArray();
+            if(bulanan_yuzlerin_dizisi.length==0){
+               // JOptionPane.showMessageDialog(null, "Şuan yüzünüzü bulamıyorum eğer yüz bölgenizde bir nesne varsa çıkartmanız gerekmektedir","Yüz bulamama Uyarısı",JOptionPane.ERROR_MESSAGE);
+             return;
+            }
+            //tam bir yüz benim bulduğum ilk yüz olmaktadır.
+            Mat tambiryuz=new Mat();
+            tambiryuz=griMat.submat(bulanan_yuzlerin_dizisi[0]);
+            /*bulduğum_ilk_yuz:
+            
+              HighGui.namedWindow("bulduğum_ilk_yuz", HighGui.WINDOW_NORMAL);
+             imshow("bulduğum_ilk_yuz", tambiryuz);
+             if (waitKey(30)>=0) {
+               Runtime.getRuntime().exit(0); 
+            }*/
+            
+             //Şimdi gözleri buluyorum
+            //Ama artık kameraverisinden göz bulmama gerek kalmadı tambiryüzden bulabilirim
+            //artık herşey tambir yüz içerisinde
+            eyecascade.detectMultiScale(tambiryuz, bulacagim_gozler,1.1,2,0|CASCADE_SCALE_IMAGE,new Size(15,15),new Size(30,30));
+            //Şimdi yüzümün etrafını çizelim
+            Imgproc.rectangle(kameraverisi, bulanan_yuzlerin_dizisi[0].tl(),bulanan_yuzlerin_dizisi[0].br(),new Scalar(0, 0, 179),3);
+            bulunan_gozlerin_dizisi=bulacagim_gozler.toArray();
+            if(bulunan_gozlerin_dizisi.length!=2){
+                //JOptionPane.showMessageDialog(null, "Nedense iki tane göz bulamadım göz bölgenizde bir nesne varsa çıkartınız","Göz bulamama hatası",JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+             for (Rect rect : bulunan_gozlerin_dizisi) {
+                 //burada da gözlerin etrafını çiziyorum
+                Imgproc.rectangle(kameraverisi,new Point(bulanan_yuzlerin_dizisi[0].tl().x+rect.tl().x,bulanan_yuzlerin_dizisi[0].tl().y+rect.tl().y),new Point(bulanan_yuzlerin_dizisi[0].tl().x+rect.br().x,bulanan_yuzlerin_dizisi[0].tl().y+rect.br().y),new Scalar(0,255,0),2);
+            }
+             //Şimdi sol gözü bulmam gerekiyo
+             Rect solgozuncercevesi = null;
+              Rect saggozuncercevesi = null;
+              solgozuncercevesi=solgozgetir(bulunan_gozlerin_dizisi);
+                    for(int i=0;i<bulunan_gozlerin_dizisi.length;i++){
+                        if(solgozuncercevesi.x!=bulunan_gozlerin_dizisi[i].x){
+                            saggozuncercevesi=bulunan_gozlerin_dizisi[i];
+                        }
+                    }
+               
+                    //şimdi contour algoritması ile hough transformunu birleştirmem lkazım
+               //hough transformunun merkezleri ile  contoursun merkezlerini karşılaştıracağım
+               //olay şu circle un içinde olması gerekir contoursun dışına çıkamaz
+                //sol göz için merkezlerin heabı
+                Point sol_icin_orta_nokta=new Point();
+                sol_icin_orta_nokta.x=(solgozuncercevesi.tl().x+solgozuncercevesi.br().x)/2;
+                sol_icin_orta_nokta.y=(solgozuncercevesi.tl().y+solgozuncercevesi.br().y)/2;
+                //ekrana bas bakalım
+               // System.out.println("Sol gozun orta noktası x ekseni:"+sol_icin_orta_nokta.x+"y ekseni:"+sol_icin_orta_nokta.y);
+                Imgproc.circle(kameraverisi, new Point(bulanan_yuzlerin_dizisi[0].tl().x+sol_icin_orta_nokta.x,bulanan_yuzlerin_dizisi[0].tl().y+sol_icin_orta_nokta.y),3,new Scalar(0,0,255),3);
+                    
+                //sag goz icin merkez hesabı
+                Point sag_icin_orta_nokta=new Point();
+                sag_icin_orta_nokta.x=(saggozuncercevesi.tl().x+saggozuncercevesi.br().x)/2;
+                sag_icin_orta_nokta.y=(saggozuncercevesi.tl().y+saggozuncercevesi.br().y)/2;
+                //System.out.println("Sag gozun orta noktası x ekseni:"+sag_icin_orta_nokta.x+"y ekseni"+sag_icin_orta_nokta.y);
+                Imgproc.circle(kameraverisi, new Point(bulanan_yuzlerin_dizisi[0].tl().x+sag_icin_orta_nokta.x,bulanan_yuzlerin_dizisi[0].tl().y+sag_icin_orta_nokta.y),3,new Scalar(255,0,0),3);
+                
+                //noktalar arası uzaklık
+              Point gozler_arasi_orta_nokta=new Point();
+              gozler_arasi_orta_nokta.x=(sol_icin_orta_nokta.x+sag_icin_orta_nokta.x)/2;
+              gozler_arasi_orta_nokta.y=(sol_icin_orta_nokta.y+sag_icin_orta_nokta.y)/2;
+             // System.out.println("gozler arasi orta nokta x ekseni:"+gozler_arasi_orta_nokta.x+"y ekseni:"+gozler_arasi_orta_nokta.y);
+              Imgproc.circle(kameraverisi, new Point(bulanan_yuzlerin_dizisi[0].tl().x+ gozler_arasi_orta_nokta.x,bulanan_yuzlerin_dizisi[0].tl().y+ gozler_arasi_orta_nokta.y),3,new Scalar(0,255,255),3);
+                
+              //yuzun ortası
+              Point yuzun_ortası=new Point();
+              yuzun_ortası.x=(bulanan_yuzlerin_dizisi[0].tl().x+bulanan_yuzlerin_dizisi[0].br().x)/2;
+              yuzun_ortası.y=(bulanan_yuzlerin_dizisi[0].tl().y+bulanan_yuzlerin_dizisi[0].br().y)/2;
+              //System.out.println("bulunan yuzun orta noktası x ekseni:"+yuzun_ortası.x+"y ekseni:"+yuzun_ortası.y);
+              Imgproc.circle(kameraverisi, new Point(yuzun_ortası.x,yuzun_ortası.y),3,new Scalar(255,0,255),3);
+              
+              double[] sonuc =new double[4];
+              cift_merkez_noktalarının_dizisi.add(yuzun_ortası);
+              sonuc=maxminbul(cift_merkez_noktalarının_dizisi);
+              Point sonucPoint=new Point();
+             sonucPoint=merkez_noktalarını_stabilize_et(cift_merkez_noktalarının_dizisi);
+             Point monitor_konumu=new Point();
+             System.out.println("ÇİFT TIKLAMA İÇİN ŞU ANKİ KONUMUN X EKSENİ:"+sonucPoint.x+"Y EKSENİ:"+sonucPoint.y);
+               if(sonucPoint.x>=sonuc[0]&& sonucPoint.x<=sonuc[2]){
+                 if(sonucPoint.y>=sonuc[1]&& sonucPoint.y<=sonuc[3]){
+                 if(sonucPoint.y>=60 && sonucPoint.y<=100){
+                      sonucPoint.y-=15;
+                 }
+                 if(sonucPoint.y>160){ 
+                     sonucPoint.y+=20;
+                 }
+                if(sonucPoint.x>250){   //bu x eksenini sag tarafa gitsin diye
+                    sonucPoint.x+=30;
+                }
+                if(sonucPoint.x<70){
+                    sonucPoint.x-=30;
+                }
+                     if(sonucPoint.x>=0&& sonucPoint.x<=80){
+             if(sonucPoint.y>=0&& sonucPoint.y<=60){
+                 monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*0.70;
+
+             }
+             else if(sonucPoint.y>60 &&sonucPoint.y<=120){
+                  monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*3.75;
+
+             }
+             else if(sonucPoint.y>120 && sonucPoint.y<=180){
+                   monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*3.75;
+             }
+             else if(sonucPoint.y>180 &&sonucPoint.y<=240){
+                 monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*5.75;
+             }
+         }
+         else if(sonucPoint.x>80 &&sonucPoint.x<=160){
+              if(sonucPoint.y>=0&& sonucPoint.y<=60){
+                    monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*0.70;
+             }
+             else if(sonucPoint.y>60 &&sonucPoint.y<=120){
+                   monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*3.75;
+             }
+             else if(sonucPoint.y>120 && sonucPoint.y<=180){
+                   monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*3.75;
+             }
+             else if(sonucPoint.y>180 &&sonucPoint.y<=240){
+                  monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*5.75;
+             }
+         }
+         else if(sonucPoint.x>160 && sonucPoint.x<=240){
+              if(sonucPoint.y>=0&& sonucPoint.y<=60){
+                    monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*0.70;
+             }
+             else if(sonucPoint.y>60 &&sonucPoint.y<=120){
+                   monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*3.75;
+             }
+             else if(sonucPoint.y>120 && sonucPoint.y<=180){
+                  monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*3.75;
+             }
+             else if(sonucPoint.y>180 &&sonucPoint.y<=240){
+                 monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*5.75;
+             }
+         }
+         //burada daha fazla x ekseninde gidebilmesi için 8 ile çarptim
+         else if(sonucPoint.x>240 &&sonucPoint.x<=320){
+              if(sonucPoint.y>=0&& sonucPoint.y<=60){
+                   monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*0.70;
+             }
+             else if(sonucPoint.y>60 &&sonucPoint.y<=120){
+                   monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*3.75;
+             }
+             else if(sonucPoint.y>120 && sonucPoint.y<=180){
+                  monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*3.75;
+             }
+             else if(sonucPoint.y>180 &&sonucPoint.y<=240){
+                  monitor_konumu.x=sonucPoint.x*5;
+                 monitor_konumu.y=sonucPoint.y*5.75;
+             }
+         }
+                 }
+             }  
+             cift_tıklama_icin_konum_degistir(monitor_konumu);
+             System.gc();
+           } catch (Exception e) {
+               System.err.println(e.getMessage());
+           }
+    }
+     
+       private static void cift_tıklama_icin_konum_degistir(Point mousePoint) {
+          try {
+              System.out.println("ÇİFT TIKLAMADA HAREKET EDİLMEK İSTENEN NOKTANIN X EKSENİ:"+ mousePoint.x+"Y EKSENİ:"+mousePoint.y);
+            if(mousePoint.x<0){
+               mousePoint.x=0;
+           }
+           if(mousePoint.y<0){
+               mousePoint.y=0;
+           }
+           if(mousePoint.y>900){
+               mousePoint.y=900;
+           }
+           if(mousePoint.x>1600){
+               mousePoint.x=1600;
+           }
+             Robot konum=new Robot();
+           konum.mouseMove((int)mousePoint.x,(int)mousePoint.y);
+            //Şuan tıklama olayını yazıyorum
+           //ama doğrudan tıklayamazsın bir noktaya tıklama yapmak için
+           //o noktanın kordinatının belirli bir süre aynı kalması lazım veya çok çok değişmesi lazım
+          
+           //ilk olarak static arraylist oluştur oluşturdum "sag_tıklanma_noktalari"
+          //bu fonksiyona her girmesi bir harekete karşılık geliyorsa her 
+          // hareket bir kordinatsa bu kordinatları ekliyeceğim
+          cift_tıklanma_noktalari.add(mousePoint);
+          cift_tıklama_yap(cift_tıklanma_noktalari);
+          } catch (Exception e) {
+              System.err.println(e.getMessage());
+          }
+    }  
+      
+       private static void cift_tıklama_yap(ArrayList<Point> cift_tıklanma_kordinatları) {
+          try {
+              if(cift_tıklanma_kordinatları.size()>1)
+              {
+                  int mask=InputEvent.BUTTON1_DOWN_MASK;
+                String soundname="C:\\Users\\Mert\\Desktop\\cift.wav";
+                Robot yerdegistir=new Robot(); 
+                for(int i=cift_aradegisken;i<cift_tıklanma_kordinatları.size();i++){
+                    if((int)cift_tıklanma_kordinatları.get(i).x==(int)cift_tıklanma_kordinatları.get(i+1).x &&(int)cift_tıklanma_kordinatları.get(i).y==(int)cift_tıklanma_kordinatları.get(i+1).y){
+                        AudioInputStream audioInputStream=AudioSystem.getAudioInputStream(new File(soundname).getAbsoluteFile());
+                        Clip clip=AudioSystem.getClip();
+                        clip.open(audioInputStream);
+                        clip.start();
+                        yerdegistir.mousePress(mask);
+                        yerdegistir.mouseRelease(mask);
+                        yerdegistir.mousePress(mask);
+                        yerdegistir.mouseRelease(mask);
+                        yerdegistir.delay(500);
+                        //clip.stop();
+                        cift_tiklandimi=1;
+                        break;
+                    }
+                    else if(Math.abs((int)cift_tıklanma_kordinatları.get(i).x-(int)cift_tıklanma_kordinatları.get(i+1).x)<=1 &&Math.abs((int)cift_tıklanma_kordinatları.get(i).y-(int)cift_tıklanma_kordinatları.get(i+1).y)<=1){
+                       AudioInputStream audioInputStream=AudioSystem.getAudioInputStream(new File(soundname).getAbsoluteFile());
+                        Clip clip=AudioSystem.getClip();
+                        clip.open(audioInputStream);
+                        clip.start(); 
+                        yerdegistir.mousePress(mask);
+                        yerdegistir.mouseRelease(mask);
+                         yerdegistir.mousePress(mask);
+                        yerdegistir.mouseRelease(mask);
+                        yerdegistir.delay(500);
+                        //clip.stop();
+                        cift_tiklandimi=1;
+                        break;
+                    }
+                    break;
+              }
+                cift_aradegisken++;
+          }
+          } catch(ArrayIndexOutOfBoundsException ex1){
+              System.err.println(ex1.getMessage());
+          }
+          catch (Exception e) {
+              System.err.println(e.getMessage());
+          }
+    }
+      
+      // PROJE TAMAMEN BİTMİŞTİR.
+}
